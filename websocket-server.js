@@ -1,36 +1,37 @@
+// server.js
 import { WebSocketServer } from "ws";
-import chalk from 'chalk';
+import chalk from "chalk";
+import readline from "readline";
 
-const server = new WebSocketServer({ port: 8080 });
+const server = new WebSocketServer({ port: 8080, host: "0.0.0.0" });
 
 let clients = [];
 
-// Manejo de conexiones
 server.on("connection", (socket) => {
   let username = null;
 
-  // Mensaje de bienvenida
   socket.send("Bienvenido al chat. Por favor, ingresa tu nombre de usuario:");
 
-  // Capturar el nombre de usuario
   socket.on("message", (message) => {
     if (!username) {
       username = message.toString();
       clients.push({ username, socket });
-      broadcast(`[Servidor]: El usuario "${username}" se ha unido al chat.`);
+      broadcastServerMessage(`El usuario "${username}" se ha unido al chat.`);
     } else {
-      broadcast(`${username}: ${message}`);
+      const fullMessage = `${username}: ${message}`;
+      console.log(chalk.cyan(fullMessage)); // Mostrar mensaje del usuario en el servidor
+      broadcast(fullMessage);
     }
   });
 
-  // Desconexión del cliente
   socket.on("close", () => {
     clients = clients.filter(client => client.socket !== socket);
-    broadcast(`[Servidor]: El usuario "${username}" ha salido del chat.`);
+    if (username) {
+      broadcastServerMessage(`El usuario "${username}" ha salido del chat.`);
+    }
   });
 });
 
-// Función para retransmitir mensajes a todos los clientes
 function broadcast(message) {
   clients.forEach(client => {
     client.socket.send(message);
@@ -38,13 +39,24 @@ function broadcast(message) {
 }
 
 function broadcastServerMessage(text) {
-  const formatted = `[Servidor]: ${text}`;
-  console.log(chalk.green(formatted)); // Visibilidad en el terminal del servidor
-  broadcast(formatted); // Envío a todos los clientes conectados
+  const formatted = "[ADMIN]: " + text;
+  console.log(chalk.green(formatted)); // Mostrar mensaje ADMIN en servidor
+  clients.forEach(client => {
+    client.socket.send(JSON.stringify({ from: "admin", text }));
+  });
 }
 
-setTimeout(() => {
-  broadcastServerMessage("El chat se cerrará en 10 minutos.");
-}, 50000);
+// Terminal para enviar mensajes como ADMIN
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
 
 console.log("Servidor WebSocket escuchando en ws://localhost:8080");
+console.log("Escribe un mensaje como ADMIN para enviarlo a todos:");
+
+rl.on("line", (input) => {
+  if (input.trim() !== "") {
+    broadcastServerMessage(input);
+  }
+});
